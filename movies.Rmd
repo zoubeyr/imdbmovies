@@ -1,0 +1,62 @@
+---
+title: "Movies"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(DT)
+library(dplyr)
+data.set = read.csv("movies.csv")
+selectedData <- reactive({
+  data <- brushedPoints(data.set, input$plot1_brush)
+  if (nrow(data) == 0){
+    data <- data.set
+  }
+  data = filter(data, imdb_score >= input$rating[1])
+  data = filter(data, imdb_score <= input$rating[2])
+  data = filter(data, num_voted_users >= 10^input$nbvote[1])
+  data = filter(data, num_voted_users <= 10^input$nbvote[2])
+  data = select(data, movie_title,director_name,country,imdb_score) %>% unique()
+  return(data)
+})
+```
+
+Input {data-width=350}
+-----------------------------------------------------------------------
+
+### Controllers
+
+```{r}
+sliderInput("rating", label = "Rating: ", min = min(data.set$imdb_score),max = max(data.set$imdb_score), value = c(7,7.5),step=0.1)
+sliderInput("nbvote", label = "nb voters (10^x): ", min = 1.2,max = 6.3, value = c(5,5.6),step=0.1)
+
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### plot
+
+```{r}
+library(ggplot2)
+
+plotOutput("plot1", brush = brushOpts(id = "plot1_brush"))
+output$plot1 <- renderPlot({
+  p = ggplot(data.set, aes(num_voted_users, imdb_score,color=genre)) + geom_point(size=3)+ylim(values=c(input$rating[1],input$rating[2]))
+  p = p + xlim(10^input$nbvote[1],10^input$nbvote[2])
+  p
+})
+
+```
+
+### table
+
+```{r}
+DT::renderDataTable(selectedData(),options = list(pageLength = 5))
+```
+
