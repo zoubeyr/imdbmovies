@@ -1,37 +1,116 @@
 ---
-title: "Untitled"
+title: "IMDB movies dataset"
 output: 
   flexdashboard::flex_dashboard:
-    orientation: columns
+    orientation: rows
     vertical_layout: fill
-    runtime: shiny
+    runtime : shiny
 ---
 
 ```{r setup, include=FALSE}
 library(flexdashboard)
+library(DT)
+library(dplyr)
+library(tidyverse)
+
+data.set = read_csv("scrap_IMDB.txt")
+metascoreValue = rep(NA, times=nrow(data.set))
+metascoreValue[which(data.set$metascore == -1)] <- 'absent'
+metascoreValue[which(data.set$metascore > 0 & data.set$metascore <= 40)] <- '0-40'
+metascoreValue[which(data.set$metascore > 40 & data.set$metascore <= 60)] <- '40-60'
+metascoreValue[which(data.set$metascore > 60 & data.set$metascore <= 80)] <- '60-80'
+metascoreValue[which(data.set$metascore > 80 & data.set$metascore <= 100)] <- '80-100'
+ind_out = which(is.na(metascoreValue))
+data.set = cbind(data.set,metascoreValue)
+data.set = data.set[-ind_out,]
+
+# genres ##########
+all.genres = data.set$genres
+all.genres = paste(all.genres, collapse=" | ")
+all.genres = gsub("  "," ", all.genres)
+all.genres = gsub("  "," ", all.genres)
+all.genres = gsub("  "," ", all.genres)
+all.genres = (strsplit(all.genres,"\\|"))[[1]]
+all.genres = gsub(" ","", all.genres)
+all.genres = unique(all.genres)
+all.genres = sort(all.genres[-which(all.genres=="NA")])
+
+# countries ###########
+all.countries = data.set$countries
+all.countries = paste(all.countries, collapse = " | ")
+all.countries = gsub("  ", " ", all.countries)
+all.countries = gsub("  ", " ", all.countries)
+all.countries = gsub("  ", " ", all.countries)
+all.countries = gsub("  ", " ", all.countries)
+all.countries = (strsplit(all.countries,"\\|"))[[1]]
+all.countries = gsub("^ ","",all.countries)
+all.countries = gsub(" $","",all.countries)
+all.countries = sort(unique(all.countries))
+
+filtered.for.plot = reactive({
+  data = data.set %>% filter(nb_raters >= 10^input$nbraters[1] & nb_raters <= 10^input$nbraters[2])
+  if(length(input$countries) > 0){
+  ind_in = grep(paste(input$countries,collapse="|"), data$countries)
+  data = data[ind_in,]
+  }
+  if(length(input$genres) > 0){
+  ind_in = grep(paste(input$genres,collapse="|"), data$genres)
+  data = data[ind_in,]
+  }
+  
+  if(length(input$category) > 0){
+  ind_in = grep(paste(input$category,collapse="|"), data$category)
+  data = data[ind_in,]
+  }
+  return(data)
+  
+})
+
+filtered.for.table = reactive({
+  data <- brushedPoints(filtered.for.plot(), input$plot1_brush)
+  if (nrow(data) == 0)
+    data <- filtered.for.plot()
+  data
+  
+})
+
+
 ```
 
-Column {data-width=650}
+Row
 -----------------------------------------------------------------------
 
-### Chart A
+### controllers
 
 ```{r}
+sliderInput("nbraters", label = "nb raters (10^): ", min = 2,max = 6.4, value = c(3,5) ,step=0.02)
+sliderInput("textsize", label = "size text: ", min = 10,max = 18, value = 14 ,step=1)
+selectInput("countries", "Countries:",choices = all.countries, multiple=TRUE)
+selectInput("genres", "Genres:",choices = all.genres, multiple=TRUE)
+selectInput("category", "Category:",choices = c("movie","series"), multiple=TRUE)
+```
+
+### plot
+
+```{r}
+library(ggplot2)
+
+plotOutput("plot1", brush = brushOpts(id = "plot1_brush"))
+output$plot1 <- renderPlot({
+  ggplot(filtered.for.plot(), aes(nb_raters,imdb_rating,color=metascoreValue)) + geom_point(size=3) + scale_color_manual(values = c("#b60e0e","#f27207","#4d9000","#0b2dd4","#191917")) + theme(legend.text = element_text(size=input$textsize),axis.text.y = element_text(size=input$textsize),axis.text.x = element_text(size=input$textsize),axis.title.y = element_text(size=input$textsize),axis.title.x = element_text(size=input$textsize)) + scale_x_continuous(limits=c(10^input$nbraters[1], 10^input$nbraters[2]))
+})
 
 ```
 
-Column {data-width=350}
+
+Row
 -----------------------------------------------------------------------
 
-### Chart B
+### table
 
 ```{r}
+DT::renderDataTable(filtered.for.table() , options = list(pageLength = 5))
 
 ```
 
-### Chart C
-
-```{r}
-
-```
 
